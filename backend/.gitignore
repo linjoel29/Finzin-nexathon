@@ -1,0 +1,8 @@
+# Secrets and installed packages must never be committed
+.env
+node_modules/
+*.log
+
+.env
+node_modules/
+
