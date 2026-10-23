@@ -4,11 +4,13 @@
 // 2. Added a top-right History icon button in the header that opens a dedicated slide-up drawer.
 // 3. Complete transaction list with filters, date grouping, timestamps, counterparty, category badges, and details sheet.
 import { useState, useEffect, useMemo } from "react";
+import { Trophy } from "lucide-react";
 import Card from "../components/Card";
 import Donut from "../components/Donut";
 import { api } from "../api/client";
 import { CATEGORIES } from "../utils/categories";
 import { formatINR, monthName } from "../utils/money";
+import FinzinLeague from "./FinzinLeague";
 
 const BILLS = [
   { name: "Mobile", icon: "📱" },
@@ -89,6 +91,10 @@ export default function Explore({
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
   const [selectedTx, setSelectedTx] = useState(null);
 
+  // Finzin League entry and summary state
+  const [leagueOpen, setLeagueOpen] = useState(false);
+  const [leagueSummary, setLeagueSummary] = useState({ lifetimeXp: 0, activeStreak: 0 });
+
   // Current month string 'YYYY-MM'
   const currentMonthStr = useMemo(() => {
     const parts = new Intl.DateTimeFormat("en-CA", {
@@ -98,6 +104,25 @@ export default function Explore({
     }).format(new Date());
     return parts.slice(0, 7);
   }, []);
+
+  // Fetch Finzin League summary for the Explore card
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get("/league/summary")
+      .then((data) => {
+        if (!cancelled && data) {
+          setLeagueSummary({
+            lifetimeXp: data.lifetimeXp ?? 0,
+            activeStreak: data.activeStreak ?? 0,
+          });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [leagueOpen]);
 
   // Fetch summary and transactions on mount
   useEffect(() => {
@@ -190,6 +215,11 @@ export default function Explore({
     [filteredTransactions]
   );
 
+  // If user opens Finzin League from the card
+  if (leagueOpen) {
+    return <FinzinLeague onBack={() => setLeagueOpen(false)} onOpenAI={onOpenAI} />;
+  }
+
   return (
     <div className="min-h-0 flex-1 overflow-y-auto pb-4">
       {/* HEADER: Title + History Icon Button */}
@@ -258,6 +288,46 @@ export default function Explore({
             </div>
           </div>
         </button>
+
+        {/* FINZIN LEAGUE CARD (Section 3 Placement: Immediately below spending overview) */}
+        <Card className="rounded-3xl border border-line bg-card p-4.5 shadow-sm transition hover:border-brand/40">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-2.5">
+              <span className="grid h-10 w-10 place-items-center rounded-2xl bg-brand/15 text-brand shadow-xs">
+                <Trophy className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 className="text-xs font-black uppercase tracking-wider text-brand">
+                  FINZIN LEAGUE
+                </h2>
+                <p className="mt-0.5 text-xs font-semibold text-ink">
+                  Build habits. Complete challenges. Rise together.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-3 flex items-center justify-between border-t border-line/60 pt-2.5 text-xs font-bold text-ink">
+            <div>
+              <span className="text-muted font-medium">Your Points: </span>
+              <span>{leagueSummary.lifetimeXp} XP</span>
+            </div>
+            <div className="border-l border-line/60 pl-3">
+              <span className="text-muted font-medium">Current Streak: </span>
+              <span>{leagueSummary.activeStreak} days</span>
+            </div>
+          </div>
+
+          <div className="mt-3">
+            <button
+              onClick={() => setLeagueOpen(true)}
+              className="w-full rounded-2xl bg-btn py-2 text-xs font-bold text-btntx shadow-sm transition hover:opacity-95 active:scale-[0.99] flex items-center justify-center gap-1.5"
+            >
+              <span>Explore Finzin League</span>
+              <span className="text-brand">→</span>
+            </button>
+          </div>
+        </Card>
 
         {/* 2. RECHARGE & BILLS */}
         <Card className="rounded-3xl p-4 shadow-sm">
