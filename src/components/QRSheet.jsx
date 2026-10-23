@@ -56,19 +56,6 @@ export default function QRSheet({ open, onClose, user, onScanned }) {
     }
   }
 
-  // DEMO scan: pretends the camera read a QR. The text goes through the SAME
-  // validation a real scan will use. The name is hardcoded for the demo; the
-  // real app will look the name up from the backend using the handle.
-  function demoScan() {
-    const result = parsePayload(buildPayload("campusbooks@finzin"));
-    if (!result) {
-      setMsg("Invalid QR code");
-      return;
-    }
-    onScanned({ handle: result.handle, name: "Campus Book Store" });
-    onClose();
-  }
-
   return (
     <>
       {/* Dark blurred background. Tapping it closes the sheet. */}
@@ -147,18 +134,11 @@ export default function QRSheet({ open, onClose, user, onScanned }) {
             </button>
           </>
         ) : (
-          <>
-            {/* Scan tab: real camera scanning is added in a later step */}
-            <div className="mx-auto grid h-[220px] w-[220px] place-items-center rounded-3xl border-2 border-dashed border-brand px-4 text-sm text-[#9FBFC5]">
-              Camera scanning is added in a later step
-            </div>
-            <button
-              onClick={demoScan}
-              className="mt-4 rounded-2xl bg-brand px-6 py-3 text-sm font-bold text-[#123b46]"
-            >
-              Demo: simulate scan
-            </button>
-          </>
+          <div className="mx-auto flex flex-col items-center justify-center h-[220px] w-[220px] rounded-3xl border-2 border-dashed border-brand/50 px-4 text-center text-sm text-[#9FBFC5]">
+            <span className="text-3xl mb-2">📷</span>
+            <span className="font-semibold text-white">Scan UPI QR</span>
+            <span className="mt-1 text-xs opacity-70">Hold the Pay button on Home to open instant camera scanner</span>
+          </div>
         )}
 
         <p role="status" className="mt-3 min-h-5 text-xs text-[#9FBFC5]">

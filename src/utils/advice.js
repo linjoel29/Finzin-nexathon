@@ -1,25 +1,26 @@
-// RULE-BASED "AI" ADVISOR. It reads the category totals and answers common
-// money questions. It is the offline fallback: when the backend AI endpoint
-// exists, FinzinAI.jsx can call that first and use this only if the call fails.
-import { CATEGORIES, MONTHLY_BUDGET, TODAY } from "../data/dummy";
+// advice.js - Helper functions for category totals, forecasting, and offline rule advice.
+import { CATEGORIES } from "./categories";
 import { formatINR } from "./money";
 
+export const MONTHLY_BUDGET = 8000;
+
 // "2026-10-22" -> "2026-10"
-export const monthKey = (date) => date.slice(0, 7);
+export const monthKey = (date) => (typeof date === "string" ? date.slice(0, 7) : "");
 
 // Adds up money SPENT (debits only) per category for one month.
 // Returns [{ key, label, color, total, share }] sorted from biggest to smallest.
-export function categoryTotals(transactions, month) {
+export function categoryTotals(transactions = [], month) {
   const sums = {};
   for (const t of transactions) {
-    if (t.type !== "debit" || monthKey(t.date) !== month) continue;
-    sums[t.category] = (sums[t.category] || 0) + t.amount;
+    if (t.type !== "debit" || (month && monthKey(t.date) !== month)) continue;
+    const cat = t.category in CATEGORIES ? t.category : "others";
+    sums[cat] = (sums[cat] || 0) + Number(t.amount || 0);
   }
   const total = Object.values(sums).reduce((a, b) => a + b, 0);
   return Object.entries(sums)
     .map(([key, value]) => ({
       key,
-      ...CATEGORIES[key],
+      ...(CATEGORIES[key] || CATEGORIES.others),
       total: value,
       share: total ? value / total : 0, // fraction of all spending (0 to 1)
     }))
@@ -27,23 +28,26 @@ export function categoryTotals(transactions, month) {
 }
 
 // Total spent = sum of all category totals
-export const totalSpent = (rows) => rows.reduce((s, r) => s + r.total, 0);
+export const totalSpent = (rows = []) => rows.reduce((s, r) => s + (r.total || 0), 0);
 
-// Day-of-month info from the fixed demo "today"
+// Day-of-month info for current date
 function dayInfo() {
-  const [y, m, d] = TODAY.split("-").map(Number);
+  const now = new Date();
+  const d = now.getDate();
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1;
   const daysInMonth = new Date(y, m, 0).getDate();
-  return { day: d, daysLeft: daysInMonth - d, daysInMonth };
+  return { day: d, daysLeft: Math.max(1, daysInMonth - d), daysInMonth };
 }
 
 // Predicts month-end spending if the current pace continues
 export function forecast(spent) {
   const { day, daysInMonth } = dayInfo();
-  return Math.round((spent / day) * daysInMonth);
+  return day > 0 ? Math.round((spent / day) * daysInMonth) : spent;
 }
 
 // Picks an answer by looking for keywords in the question
-export function getAdvice(question, rows) {
+export function getAdvice(question = "", rows = []) {
   const q = question.toLowerCase();
   const spent = totalSpent(rows);
   if (!rows.length) return "I do not see any spending this month yet. Make a payment and ask me again.";

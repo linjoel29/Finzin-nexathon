@@ -64,3 +64,12 @@ body {
 button {
   cursor: pointer;
 }
+
+/* Hide scrollbars across all scrollable containers while keeping scrolling active */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+*::-webkit-scrollbar {
+  display: none;
+}

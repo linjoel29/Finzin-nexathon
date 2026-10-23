@@ -1,3 +1,8 @@
+// BottomNav.jsx - 5-tab sliding navigation with gesture-enabled circular action button.
+// Features: Single tap to navigate, Double-Tap (<300ms) or Long-Press (~500ms with scale/pulse feedback)
+// on the center primary circular button to launch live QR camera scanner directly.
+import { useFastScanGesture } from "../utils/useFastScanGesture";
+
 // The 5 tabs. "d" is the icon drawing (SVG path) shown inside each round button.
 const TABS = [
   { name: "Account", d: "M3 10l9-6 9 6M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18" },
@@ -10,37 +15,51 @@ const TABS = [
 // Distance (px) between neighbouring buttons
 const GAP = 70;
 
-// Props: "active" = name of the selected tab, "onChange" = function called on tap
-export default function BottomNav({ active, onChange }) {
+// Props: "active" = name of selected tab, "onChange" = tab changer, "onFastScan" = QR camera scanner launcher
+export default function BottomNav({ active, onChange, onFastScan }) {
   const activeIdx = TABS.findIndex((t) => t.name === active);
 
+  // Gesture detection for the primary active circular button
+  const { isHolding, bindGesture } = useFastScanGesture({
+    onSingleTap: () => {
+      // Retain standard behavior: if clicking another tab or re-tapping current
+      const activeTab = TABS[activeIdx];
+      if (activeTab) onChange(activeTab.name);
+    },
+    onFastScan,
+  });
+
   return (
-    // overflow-hidden clips the buttons that slide past the screen edge
     <nav className="relative h-[110px] shrink-0 overflow-hidden border-t border-line">
       {TABS.map((tab, i) => {
-        // offset = how far this tab is from the active one (0 means it IS the active tab)
         const offset = i - activeIdx;
         const isActive = offset === 0;
 
         return (
           <button
             key={tab.name}
-            onClick={() => onChange(tab.name)}
-            aria-label={tab.name}
-            // All buttons start at the center, then slide left/right by offset.
-            // The active one has offset 0, so it always sits in the middle and is scaled up.
-            style={{
-              transform: `translateX(calc(-50% + ${offset * GAP}px)) scale(${isActive ? 1.3 : 1})`,
-            }}
-            className={`absolute left-1/2 top-[18px] grid h-[52px] w-[52px] place-items-center rounded-full transition-all duration-300 ${
+            aria-label={
               isActive
-                ? "bg-brand text-[#123b46] shadow-[0_0_0_4px_var(--bg),0_0_0_7px_var(--pri)]"
-                : "bg-line text-muted"
+                ? `${tab.name} (Double-tap or hold for QR scanner)`
+                : tab.name
+            }
+            {...(isActive ? bindGesture : { onClick: () => onChange(tab.name) })}
+            style={{
+              transform: `translateX(calc(-50% + ${offset * GAP}px)) scale(${
+                isActive ? (isHolding ? 1.45 : 1.3) : 1
+              })`,
+            }}
+            className={`absolute left-1/2 top-[18px] grid h-[52px] w-[52px] place-items-center rounded-full transition-all duration-300 select-none ${
+              isActive
+                ? isHolding
+                  ? "bg-brand text-[#123b46] ring-4 ring-brand/60 animate-pulse shadow-[0_0_16px_var(--pri)]"
+                  : "bg-brand text-[#123b46] shadow-[0_0_0_4px_var(--bg),0_0_0_7px_var(--pri)]"
+                : "bg-line text-muted hover:text-ink active:scale-95"
             }`}
           >
             <svg
               viewBox="0 0 24 24"
-              className="h-6 w-6"
+              className="h-6 w-6 pointer-events-none"
               fill="none"
               stroke="currentColor"
               strokeWidth="1.8"
@@ -53,9 +72,14 @@ export default function BottomNav({ active, onChange }) {
         );
       })}
 
-      {/* Name of the active tab, shown under the big circle */}
-      <div className="absolute inset-x-0 bottom-2 text-center text-[11px] font-semibold">
-        {active}
+      {/* Name of the active tab + quick scan hint */}
+      <div className="absolute inset-x-0 bottom-2 text-center text-[11px] font-semibold text-ink flex flex-col items-center">
+        <span>{active}</span>
+        {active === "Home" && (
+          <span className="text-[9px] text-muted font-normal -mt-0.5">
+            Double-tap or hold for QR Scanner
+          </span>
+        )}
       </div>
     </nav>
   );
