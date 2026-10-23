@@ -1,0 +1,66 @@
+/* Loads Tailwind (must stay the first line) */
+@import "tailwindcss";
+
+/* ---------- COLOR TOKENS ----------
+   One place to change the whole app's colors.
+   Light theme is the default. */
+:root {
+  --bg: #e8fafb;      /* page background */
+  --card: #ffffff;    /* cards and pills */
+  --tx: #123b46;      /* main text (deep teal) */
+  --mut: #58747a;     /* secondary text */
+  --line: #d6eaec;    /* borders */
+  --pri: #22c7d6;     /* cyan accent (use for accents, not white text) */
+  --btn: #123b46;     /* button background */
+  --btntx: #ffffff;   /* text on buttons */
+  --ok: #16845b;      /* success */
+  --err: #d64550;     /* error */
+}
+
+/* Dark theme: follows the phone's dark mode setting */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #123b46;
+    --card: #1a4a57;
+    --tx: #e8fafb;
+    --mut: #9fbfc5;
+    --line: #2a5c6a;
+    --btn: #22c7d6;   /* cyan button with deep teal text in dark mode */
+    --btntx: #123b46;
+    --ok: #4ade9b;
+    --err: #ff8a93;
+  }
+}
+
+/* Makes Tailwind classes like bg-bg, bg-card, text-ink, text-muted,
+   border-line, bg-btn, text-btntx, text-err use the tokens above */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-card: var(--card);
+  --color-ink: var(--tx);
+  --color-muted: var(--mut);
+  --color-line: var(--line);
+  --color-brand: var(--pri);
+  --color-btn: var(--btn);
+  --color-btntx: var(--btntx);
+  --color-ok: var(--ok);
+  --color-err: var(--err);
+  --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
+}
+
+/* Page basics */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+body {
+  background: var(--bg);
+  color: var(--tx);
+  font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent; /* removes the grey flash on tap */
+}
+button {
+  cursor: pointer;
+}
