@@ -10,8 +10,8 @@ const { notFound, errorHandler } = require('./middleware/errorHandler');
 function createApp({ env, pool, mailer, ai }) {
   const app = express();
 
-  // Behind Render/Railway there is one proxy; trust it so rate limits see the real client IP
-  if (env.NODE_ENV === 'production') app.set('trust proxy', 1);
+  // Trust reverse proxies (Render, Cloudflare, Vercel) so Express and rate limiters see the real client IP
+  app.set('trust proxy', true);
 
   // Security headers (also hides "X-Powered-By: Express")
   app.use(helmet());
@@ -23,7 +23,18 @@ function createApp({ env, pool, mailer, ai }) {
   app.use(express.json({ limit: '10kb' }));
 
   // Global rate limit: 100 requests/minute per IP. Stricter limits get added per route (OTP, PIN, payments).
-  app.use(rateLimit({ windowMs: 60_000, limit: 100, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many requests, slow down' } }));
+  const { getClientIp } = require('./middleware/rateLimiters');
+  app.use(
+    rateLimit({
+      windowMs: 60_000,
+      limit: 100,
+      standardHeaders: true,
+      legacyHeaders: false,
+      validate: { trustProxy: false, xForwardedForHeader: false },
+      keyGenerator: (req) => getClientIp(req),
+      message: { error: 'Too many requests, slow down' },
+    })
+  );
 
   // Health check: confirms the server is up AND the database answers
   app.get('/api/health', async (_req, res, next) => {

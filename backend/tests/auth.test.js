@@ -204,3 +204,40 @@ test('PIN lockout: 3 wrong tries lock for 15 min; correct PIN resets counter', {
 
   await cleanUser(email, mobile);
 });
+
+test('mailer failure rolls back OTP database row and allows immediate retry once fixed', { skip }, async () => {
+  const email = 'mailer_fail_test@student.edu';
+  await cleanUsers(pool, [email], []);
+
+  // App with a failing mailer
+  const failingMailer = {
+    sendOtpEmail: async () => {
+      const { AppError } = require('../src/utils/AppError');
+      throw new AppError(503, 'Email delivery service is temporarily unavailable. Please try again shortly.');
+    },
+  };
+  const failingApp = createApp({ env, pool, mailer: failingMailer });
+
+  // 1. Request OTP with failing mailer -> fails with 503
+  const res = await request(failingApp)
+    .post('/api/auth/send-otp')
+    .set('X-Forwarded-For', '203.0.113.195')
+    .send({ email });
+  assert.equal(res.status, 503);
+  assert.ok(res.body.error.includes('Email delivery service is temporarily unavailable'));
+
+  // 2. Verify OTP row was rolled back in the database
+  const checkDb = await pool.query('SELECT * FROM otps WHERE email = $1', [email]);
+  assert.equal(checkDb.rows.length, 0);
+
+  // 3. Immediately retry with working mailer -> succeeds without 60s cooldown block
+  const workingApp = createApp({ env, pool, mailer: fakeMailer });
+  const retryRes = await request(workingApp)
+    .post('/api/auth/send-otp')
+    .set('X-Forwarded-For', '203.0.113.196')
+    .send({ email });
+  assert.equal(retryRes.status, 200);
+
+  await cleanUsers(pool, [email], []);
+});
+

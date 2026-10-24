@@ -78,7 +78,13 @@ async function sendOtp({ email, pool, env, mailer }) {
 
   // Dispatch email (mailer handles transport and failure gracefully)
   if (mailer && typeof mailer.sendOtpEmail === 'function') {
-    await mailer.sendOtpEmail({ to: normalizedEmail, code });
+    try {
+      await mailer.sendOtpEmail({ to: normalizedEmail, code });
+    } catch (err) {
+      // If email delivery fails, roll back the OTP record so the user is not locked out by the 60-second cooldown
+      await pool.query('DELETE FROM otps WHERE email = $1', [normalizedEmail]).catch(() => {});
+      throw err;
+    }
   }
 
   // Always return the exact same generic message regardless of user existence
