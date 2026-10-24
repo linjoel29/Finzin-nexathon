@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { api } from "../api/client";
-import { useFastScanGesture } from "../utils/useFastScanGesture";
 import { formatINR } from "../utils/money";
 
 // Keypad buttons in display order. "<" means backspace.
@@ -110,22 +109,11 @@ export default function Home({
   }, [viewState]);
 
   // Personal Payment QR modal opener: opens user's own payment QR on click or tap
-  const lastOpenRef = useRef(0);
   const handleOpenQR = useCallback(() => {
-    const now = Date.now();
-    if (now - lastOpenRef.current < 250) return; // Prevent duplicate triggers within 250ms
-    lastOpenRef.current = now;
-
     if (typeof onOpenQR === "function") {
       onOpenQR();
     }
   }, [onOpenQR]);
-
-  // Fast interaction gesture for the top header circular logo
-  const { isHolding, bindGesture } = useFastScanGesture({
-    onSingleTap: handleOpenQR,
-    onFastScan: handleOpenQR,
-  });
 
   // Hide balance automatically after 4 seconds
   useEffect(() => {
@@ -419,15 +407,10 @@ export default function Home({
         {/* Center circular Finzin logo opens personal payment QR modal */}
         <button
           type="button"
-          {...bindGesture}
           onClick={handleOpenQR}
           aria-label="View My Payment QR Code"
           title="View My Payment QR Code"
-          className={`cursor-pointer flex items-center gap-1.5 rounded-full border border-line bg-card px-3.5 py-1.5 text-lg font-bold text-ink shadow-sm transition-all duration-200 select-none ${
-            isHolding
-              ? "scale-110 ring-4 ring-brand/60 bg-brand text-[#123b46] animate-pulse"
-              : "hover:border-brand/40 hover:bg-card/80 active:scale-95"
-          }`}
+          className="cursor-pointer touch-manipulation flex items-center gap-1.5 rounded-full border border-line bg-card px-3.5 py-1.5 text-lg font-bold text-ink shadow-sm transition-all duration-150 hover:border-brand/40 hover:bg-card/80 active:scale-95 select-none"
         >
           Finzin
         </button>

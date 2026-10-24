@@ -243,15 +243,15 @@ export default function QRSheet({ open, onClose, user }) {
 
   const avatarLetter = profile.name?.[0]?.toUpperCase() || "S";
 
+  if (!open) return null;
+
   return (
     <>
       {/* Dark blurred background backdrop - tapping closes modal */}
       <div
         onClick={onClose}
         aria-hidden="true"
-        className={`fixed inset-0 z-50 bg-black/70 backdrop-blur-md transition-opacity duration-300 ${
-          open ? "opacity-100" : "pointer-events-none opacity-0"
-        }`}
+        className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-md transition-opacity duration-200"
       />
 
       {/* Modal dialog */}
@@ -259,12 +259,7 @@ export default function QRSheet({ open, onClose, user }) {
         role="dialog"
         aria-modal="true"
         aria-label="My Finzin Payment QR Code"
-        inert={!open}
-        className={`fixed bottom-0 sm:bottom-auto sm:top-1/2 left-1/2 -translate-x-1/2 sm:-translate-y-1/2 z-50 w-full max-w-[420px] rounded-t-[32px] sm:rounded-[32px] bg-[#0B2830] border border-[#16414D] p-5 text-[#E8FAFB] shadow-2xl transition-all duration-300 ${
-          open
-            ? "translate-y-0 opacity-100"
-            : "translate-y-full sm:translate-y-8 opacity-0 pointer-events-none"
-        }`}
+        className="fixed bottom-0 sm:bottom-auto sm:top-1/2 left-1/2 -translate-x-1/2 sm:-translate-y-1/2 z-[70] w-full max-w-[420px] rounded-t-[32px] sm:rounded-[32px] bg-[#0B2830] border border-[#16414D] p-5 pb-[calc(24px+env(safe-area-inset-bottom))] text-[#E8FAFB] shadow-2xl max-h-[92vh] overflow-y-auto"
       >
         {/* Mobile touch indicator */}
         <div className="mx-auto mb-2 h-1.5 w-10 rounded-full bg-[#16414D] sm:hidden" />
