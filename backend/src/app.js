@@ -50,6 +50,24 @@ function createApp({ env, pool, mailer, ai }) {
   const { createMailer } = require('./services/mailer');
   const activeMailer = mailer || createMailer(env);
 
+  // Run non-blocking SMTP connectivity check on boot in non-test environments
+  if (env.NODE_ENV !== 'test' && activeMailer.isConfigured()) {
+    activeMailer.verifyConnection().catch(() => {});
+  }
+
+  // Safe SMTP diagnostic check: verifies SMTP connectivity and timeouts without exposing credentials or PII
+  app.get('/api/health/smtp', async (_req, res) => {
+    if (!activeMailer || typeof activeMailer.verifyConnection !== 'function') {
+      return res.status(503).json({ status: 'unconfigured', message: 'Mailer not initialized' });
+    }
+    const report = await activeMailer.verifyConnection();
+    const isConnected = report.port587?.ok || report.port465?.ok;
+    return res.status(isConnected ? 200 : 503).json({
+      status: isConnected ? 'connected' : 'unavailable',
+      diagnostics: report,
+    });
+  });
+
   const { createAuthRouter } = require('./routes/auth');
   const { createProfileRouter } = require('./routes/profile');
   const { createUsersRouter } = require('./routes/users');
