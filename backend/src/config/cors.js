@@ -32,9 +32,13 @@ function isAllowedOrigin(origin, envClientOrigin) {
 
   // 1. Check exact configured origins from env (supports comma-separated list, trims whitespace, ignores trailing slashes)
   if (envClientOrigin) {
-    const configuredOrigins = envClientOrigin
+    const sanitizedOrigin = envClientOrigin
+      .trim()
+      .replace(/^["']?CLIENT_ORIGIN=\s*/i, '')
+      .replace(/["']$/, '');
+    const configuredOrigins = sanitizedOrigin
       .split(',')
-      .map((o) => o.trim().replace(/\/+$/, ''))
+      .map((o) => o.trim().replace(/\/+$/, '').replace(/^["']|["']$/g, ''))
       .filter(Boolean);
 
     if (configuredOrigins.some((o) => o.toLowerCase() === cleanOrigin.toLowerCase())) {

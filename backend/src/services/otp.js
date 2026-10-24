@@ -88,6 +88,13 @@ async function sendOtp({ email, pool, env, mailer }) {
     try {
       await mailer.sendOtpEmail({ to: normalizedEmail, code });
     } catch (err) {
+      // In demo mode with DEMO_OTP configured, allow user to log in with the demo code even if email delivery fails
+      if (env.DEMO_OTP) {
+        console.warn(`[otp] Email send failed in DEMO mode (${err.message}). DEMO_OTP code is: ${env.DEMO_OTP}`);
+        await pool.query('UPDATE otps SET last_sent_at = now() WHERE email = $1', [normalizedEmail]);
+        return { message: 'If this email is valid, a verification code has been sent' };
+      }
+
       // If email delivery fails, roll back OTP / cooldown so the user is not blocked from retrying
       if (!previousRow) {
         await pool.query('DELETE FROM otps WHERE email = $1', [normalizedEmail]).catch(() => {});

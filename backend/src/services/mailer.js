@@ -279,7 +279,10 @@ async function sendBrevoEmail({ to, code, env, fetchFn = globalThis.fetch }) {
  * @returns {object} Mailer with sendOtpEmail and verifyConnection methods
  */
 function createMailer(env, options = {}) {
-  const provider = (env.EMAIL_PROVIDER || (env.BREVO_API_KEY ? 'brevo' : 'smtp')).toLowerCase();
+  const hasBrevoKey = Boolean(env.BREVO_API_KEY && typeof env.BREVO_API_KEY === 'string' && env.BREVO_API_KEY.trim());
+  const provider = (hasBrevoKey && env.EMAIL_PROVIDER !== 'smtp')
+    ? 'brevo'
+    : (env.EMAIL_PROVIDER || 'smtp').toLowerCase();
   const fetchFn = options.fetchFn || globalThis.fetch;
 
   // 1. BREVO HTTPS PROVIDER (Cloud / Render default over port 443)
