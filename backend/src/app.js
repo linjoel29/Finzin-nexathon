@@ -66,7 +66,7 @@ function createApp({ env, pool, mailer, ai }) {
       return res.status(503).json({ status: 'unconfigured', message: 'Mailer not initialized' });
     }
     const report = await activeMailer.verifyConnection();
-    const isConnected = report.port587?.ok || report.port465?.ok;
+    const isConnected = report.status === 'CONNECTED' || Boolean(report.port587?.ok || report.port465?.ok);
     return res.status(isConnected ? 200 : 503).json({
       status: isConnected ? 'connected' : 'unavailable',
       diagnostics: report,
