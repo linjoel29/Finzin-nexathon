@@ -53,7 +53,8 @@ function AppContent() {
     }
   }, []);
 
-  // QR sheet closer
+  // QR sheet opener and closer
+  const openQR = useCallback(() => setQrOpen(true), []);
   const closeQR = useCallback(() => setQrOpen(false), []);
 
   // Live camera scanner closer
@@ -95,7 +96,7 @@ function AppContent() {
           are not lost when the user switches tabs */}
       <div className={tab === "Home" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
         <Home
-          onOpenQR={() => setQrOpen(true)}
+          onOpenQR={openQR}
           onFastScan={openScanner}
           payee={payee}
           onClearPayee={() => setPayee(null)}

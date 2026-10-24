@@ -1,7 +1,7 @@
 // Home.jsx - Core Payment and Keypad interface for Finzin.
 // Flow: AMOUNT -> SELECT_METHOD -> INPUT_DETAILS -> PROCESSING -> RECEIPT.
 // Preserves dark-teal & cyan aesthetics, on-screen keypad, live balance, and fast-scan gestures.
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Landmark,
   Smartphone,
@@ -45,7 +45,14 @@ const METHODS = [
   },
 ];
 
-export default function Home({ onOpenQR, onFastScan, payee, onClearPayee, onPaymentSuccess }) {
+export default function Home({
+  onOpenQR,
+  onFastScan,
+  onOpenScanner,
+  payee,
+  onClearPayee,
+  onPaymentSuccess,
+}) {
   const { user } = useAuth();
 
   // ---------- VIEW STATE ENGINE ----------
@@ -102,10 +109,22 @@ export default function Home({ onOpenQR, onFastScan, payee, onClearPayee, onPaym
     };
   }, [viewState]);
 
-  // Fast QR Scanner gesture detection for the top header circular logo
+  // Personal Payment QR modal opener: opens user's own payment QR on click or tap
+  const lastOpenRef = useRef(0);
+  const handleOpenQR = useCallback(() => {
+    const now = Date.now();
+    if (now - lastOpenRef.current < 250) return; // Prevent duplicate triggers within 250ms
+    lastOpenRef.current = now;
+
+    if (typeof onOpenQR === "function") {
+      onOpenQR();
+    }
+  }, [onOpenQR]);
+
+  // Fast interaction gesture for the top header circular logo
   const { isHolding, bindGesture } = useFastScanGesture({
-    onSingleTap: onOpenQR,
-    onFastScan,
+    onSingleTap: handleOpenQR,
+    onFastScan: handleOpenQR,
   });
 
   // Hide balance automatically after 4 seconds
@@ -397,14 +416,17 @@ export default function Home({ onOpenQR, onFastScan, payee, onClearPayee, onPaym
           <span className="truncate max-w-[100px]">{displayName.split(" ")[0]}</span>
         </div>
 
-        {/* Center circular Finzin logo with fast-scan gesture */}
+        {/* Center circular Finzin logo opens personal payment QR modal */}
         <button
+          type="button"
           {...bindGesture}
-          aria-label="Finzin Logo"
-          className={`flex items-center gap-1.5 rounded-full border border-line bg-card px-3.5 py-1.5 text-lg font-bold text-ink shadow-sm transition-all duration-200 ${
+          onClick={handleOpenQR}
+          aria-label="View My Payment QR Code"
+          title="View My Payment QR Code"
+          className={`cursor-pointer flex items-center gap-1.5 rounded-full border border-line bg-card px-3.5 py-1.5 text-lg font-bold text-ink shadow-sm transition-all duration-200 select-none ${
             isHolding
               ? "scale-110 ring-4 ring-brand/60 bg-brand text-[#123b46] animate-pulse"
-              : "hover:border-brand/40 active:scale-95"
+              : "hover:border-brand/40 hover:bg-card/80 active:scale-95"
           }`}
         >
           Finzin
