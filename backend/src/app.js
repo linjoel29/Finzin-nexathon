@@ -2,8 +2,8 @@
 // Kept separate from server.js so tests can use the app without opening a port.
 const express = require('express');
 const helmet = require('helmet');
-const cors = require('cors');
 const rateLimit = require('express-rate-limit');
+const { createCorsMiddleware } = require('./config/cors');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 // env = validated config, pool = database connection pool, mailer = optional mailer, ai = optional AI service
@@ -16,8 +16,8 @@ function createApp({ env, pool, mailer, ai }) {
   // Security headers (also hides "X-Powered-By: Express")
   app.use(helmet());
 
-  // Strict CORS: only the frontend origin from .env may call us from a browser, allowing DELETE for goals
-  app.use(cors({ origin: env.CLIENT_ORIGIN, methods: ['GET', 'POST', 'PATCH', 'DELETE'], allowedHeaders: ['Content-Type', 'Authorization'] }));
+  // Strict CORS: allows verified production origins and trusted project Vercel previews
+  app.use(createCorsMiddleware(env));
 
   // Tiny JSON body limit stops big-payload abuse
   app.use(express.json({ limit: '10kb' }));

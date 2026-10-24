@@ -15,8 +15,8 @@ const schema = z.object({
   DATABASE_URL: z.string().min(10, 'DATABASE_URL is missing'),
   // Signing key for JWTs: long and random, or tokens can be forged
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
-  // The only website allowed to call this API from a browser
-  CLIENT_ORIGIN: z.string().url().default('http://localhost:5173'),
+  // The only website allowed to call this API from a browser (can be single origin or comma-separated list)
+  CLIENT_ORIGIN: z.string().min(1).default('http://localhost:5173'),
   // Email (used from Step 2, optional now)
   GMAIL_USER: optionalString,
   GMAIL_APP_PASSWORD: optionalString,
