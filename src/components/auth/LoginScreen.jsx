@@ -1,13 +1,31 @@
 // LoginScreen.jsx - Initial authentication screen: enter student email to receive OTP.
-import { useState } from 'react';
+// Features:
+// 1. 40s request timeout with automatic detection if server is waking up (> 5s).
+// 2. Clear "Server is waking up, please wait" message.
+// 3. One-click "Retry" button on network or server errors.
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 
 export default function LoginScreen() {
   const { sendOtp, loading, error, setError } = useAuth();
   const [email, setEmail] = useState('');
+  const [isWaking, setIsWaking] = useState(false);
+
+  // If request takes longer than 5 seconds (Render free tier cold boot), show waking message
+  useEffect(() => {
+    let timer;
+    if (loading) {
+      timer = setTimeout(() => {
+        setIsWaking(true);
+      }, 5000);
+    } else {
+      setIsWaking(false);
+    }
+    return () => clearTimeout(timer);
+  }, [loading]);
 
   async function handleSubmit(e) {
-    e.preventDefault();
+    if (e) e.preventDefault();
     if (!email.trim() || !email.includes('@')) {
       setError('Please enter a valid student email address');
       return;
@@ -15,7 +33,7 @@ export default function LoginScreen() {
     try {
       await sendOtp(email);
     } catch (err) {
-      // Error handled in AuthContext
+      // Error is stored in AuthContext
     }
   }
 
@@ -51,9 +69,29 @@ export default function LoginScreen() {
             />
           </div>
 
+          {/* Render cold boot / wake-up status indicator */}
+          {loading && isWaking && (
+            <div className="flex items-center gap-2.5 rounded-xl bg-brand/10 border border-brand/20 p-3 text-xs text-brand font-medium">
+              <svg className="h-4 w-4 animate-spin shrink-0" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
+              <span>Server is waking up, please wait...</span>
+            </div>
+          )}
+
+          {/* Error display with inline Retry button */}
           {error && (
-            <div className="rounded-xl bg-err/10 px-4 py-2.5 text-xs font-medium text-err">
-              {error}
+            <div className="flex flex-col gap-2 rounded-xl bg-err/10 border border-err/20 p-3 text-xs text-err">
+              <span className="font-medium">{error}</span>
+              <button
+                type="button"
+                onClick={() => handleSubmit()}
+                disabled={loading}
+                className="self-start rounded-lg bg-err/15 px-3 py-1 font-semibold text-err hover:bg-err/25 transition disabled:opacity-50"
+              >
+                Retry
+              </button>
             </div>
           )}
 
@@ -68,8 +106,10 @@ export default function LoginScreen() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                 </svg>
-                Sending OTP...
+                {isWaking ? 'Server is waking up, please wait...' : 'Sending OTP...'}
               </span>
+            ) : error ? (
+              'Retry Sending OTP'
             ) : (
               'Continue with OTP'
             )}

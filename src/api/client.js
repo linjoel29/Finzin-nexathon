@@ -113,9 +113,21 @@ export async function apiRequest(endpoint, options = {}) {
     ...(options.headers || {}),
   };
 
+  // 40 second timeout for OTP requests (handles Render cold boot), 25s for other requests
+  const timeoutMs = options.timeout || (endpoint.includes('send-otp') ? 40000 : 25000);
+  const controller = new AbortController();
+  const timeoutTimer = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+
+  if (options.signal) {
+    options.signal.addEventListener('abort', () => controller.abort());
+  }
+
   const config = {
     ...options,
     headers,
+    signal: controller.signal,
   };
 
   if (config.body && typeof config.body === 'object' && !(config.body instanceof FormData)) {
@@ -126,8 +138,13 @@ export async function apiRequest(endpoint, options = {}) {
   try {
     response = await fetch(url, config);
   } catch (netErr) {
+    if (netErr.name === 'AbortError' || controller.signal.aborted) {
+      throw new Error('Request timed out. The server might be waking up, please try again.');
+    }
     // Network drops, CORS preflight rejections, server down
     throw new Error('Unable to connect to Finzin server. Please check your internet or backend connection.');
+  } finally {
+    clearTimeout(timeoutTimer);
   }
 
   // Handle auto-logout on expired or revoked token (401)
@@ -174,7 +191,7 @@ export async function apiRequest(endpoint, options = {}) {
 
 // REST shorthand utilities
 export const api = {
-  get: (endpoint, query) => {
+  get: (endpoint, query, options = {}) => {
     let url = endpoint;
     if (query && Object.keys(query).length > 0) {
       const sp = new URLSearchParams();
@@ -184,9 +201,9 @@ export const api = {
       const qs = sp.toString();
       if (qs) url += (url.includes('?') ? '&' : '?') + qs;
     }
-    return apiRequest(url, { method: 'GET' });
+    return apiRequest(url, { method: 'GET', ...options });
   },
-  post: (endpoint, body) => apiRequest(endpoint, { method: 'POST', body }),
-  patch: (endpoint, body) => apiRequest(endpoint, { method: 'PATCH', body }),
-  delete: (endpoint) => apiRequest(endpoint, { method: 'DELETE' }),
+  post: (endpoint, body, options = {}) => apiRequest(endpoint, { method: 'POST', body, ...options }),
+  patch: (endpoint, body, options = {}) => apiRequest(endpoint, { method: 'PATCH', body, ...options }),
+  delete: (endpoint, options = {}) => apiRequest(endpoint, { method: 'DELETE', ...options }),
 };

@@ -10,8 +10,8 @@ const { notFound, errorHandler } = require('./middleware/errorHandler');
 function createApp({ env, pool, mailer, ai }) {
   const app = express();
 
-  // Trust reverse proxies (Render, Cloudflare, Vercel) so Express and rate limiters see the real client IP
-  app.set('trust proxy', true);
+  // Trust 1 hop behind Render's reverse proxy so Express sees the real user IP
+  app.set('trust proxy', 1);
 
   // Security headers (also hides "X-Powered-By: Express")
   app.use(helmet());
@@ -35,6 +35,11 @@ function createApp({ env, pool, mailer, ai }) {
       message: { error: 'Too many requests, slow down' },
     })
   );
+
+  // Tiny GET /health route for uptime pings (returns ok, zero secrets, no DB overhead)
+  app.get('/health', (_req, res) => {
+    res.status(200).json({ status: 'ok' });
+  });
 
   // Health check: confirms the server is up AND the database answers
   app.get('/api/health', async (_req, res, next) => {

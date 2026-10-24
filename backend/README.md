@@ -24,16 +24,25 @@ Finzin is a secure, student-focused banking API built for hackathons. All money 
    - If your password contains symbols (`@ # / :`), URL-encode them (`@` = `%40`, `#` = `%23`).
    - Set `DATABASE_URL` in `.env`.
 
-4. **Gmail SMTP Setup (Step 2 Email OTPs):**
-   - Enable **2-Step Verification** on your Google Account: [myaccount.google.com/security](https://myaccount.google.com/security).
-   - Create an **App Password**: Go to Security -> 2-Step Verification -> App Passwords -> Create an app password for "Finzin".
-   - Set `GMAIL_USER=your_email@gmail.com` and `GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx` in `.env`.
-   - *Demo alternative*: Set `DEMO_OTP=123456` in development to use a fixed 6-digit code. Note: `DEMO_OTP` is automatically rejected in production.
+4. **Email OTP Setup (Step 2 Authentication):**
+   - **Brevo HTTPS API (Recommended for Render / Cloud deployments):**
+     - Render's free tier blocks outbound SMTP ports 25, 465, and 587. Brevo communicates over standard HTTPS (port 443).
+     - Sign up at [brevo.com](https://brevo.com) and generate an API key at **Settings** -> **SMTP & API** -> **API Keys**.
+     - Verify a sender email address in Brevo under **Senders & IP**.
+     - Set in `.env` (or Render Dashboard):
+       - `EMAIL_PROVIDER=brevo`
+       - `BREVO_API_KEY=xkeysib-xxxx...`
+       - `MAIL_FROM_EMAIL=your-verified-sender@yourdomain.com`
+       - `MAIL_FROM_NAME=Finzin Banking`
+   - **Local Gmail SMTP (Alternative for Local Dev only):**
+     - Set `EMAIL_PROVIDER=smtp`.
+     - Enable **2-Step Verification** on Google Account and generate an **App Password** for "Finzin".
+     - Set `GMAIL_USER=your_email@gmail.com` and `GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx`.
+   - *Demo alternative*: Set `DEMO_OTP=123456` in local development to test without external email. Note: `DEMO_OTP` is automatically blocked in production.
 
-5. **Google AI Studio (Step 6 Gemini AI Coach):**
-   - Get a free Gemini API key at [aistudio.google.com](https://aistudio.google.com).
-   - Set `GEMINI_API_KEY=your_key_here` and `GEMINI_MODEL=gemini-2.0-flash` in `.env`.
-   - If omitted, the API automatically falls back to deterministic rule-based advice.
+5. **AI Financial Coach (Groq API):**
+   - Get a free API key at [console.groq.com](https://console.groq.com).
+   - Set `GROQ_API_KEY=gsk_...` and `GROQ_MODEL=llama-3.3-70b-versatile` in `.env`.
 
 ---
 

@@ -51,12 +51,18 @@ async function sendOtp({ email, pool, env, mailer }) {
     [normalizedEmail]
   );
 
-  if (existingRes.rows.length > 0) {
-    const lastSentAt = new Date(existingRes.rows[0].last_sent_at).getTime();
-    const elapsedSeconds = (Date.now() - lastSentAt) / 1000;
-    if (elapsedSeconds < 60) {
-      const remaining = Math.ceil(60 - elapsedSeconds);
-      throw new AppError(429, `Please wait ${remaining} seconds before requesting a new OTP`);
+  const previousRow = existingRes.rows[0] || null;
+  const previousLastSentAt = previousRow?.last_sent_at || null;
+
+  if (previousLastSentAt) {
+    const lastSentAt = new Date(previousLastSentAt).getTime();
+    // Only enforce cooldown if last_sent_at is greater than epoch (> 1000ms)
+    if (lastSentAt > 1000) {
+      const elapsedSeconds = (Date.now() - lastSentAt) / 1000;
+      if (elapsedSeconds < 60) {
+        const remaining = Math.ceil(60 - elapsedSeconds);
+        throw new AppError(429, `Please wait ${remaining} seconds before requesting a new OTP`);
+      }
     }
   }
 
@@ -64,16 +70,17 @@ async function sendOtp({ email, pool, env, mailer }) {
   const code = generateOtpCode(env);
   const codeHash = hashOtp(code, env.JWT_SECRET);
 
-  // Upsert OTP record: expires in 5 minutes, reset attempts to 0, record last_sent_at
+  // Upsert OTP record: expires in 5 minutes, reset attempts to 0.
+  // Note: last_sent_at is NOT updated to now() yet; it retains previous timestamp or epoch 0 until send succeeds
   await pool.query(
     `INSERT INTO otps (email, code_hash, attempts, expires_at, last_sent_at)
-     VALUES ($1, $2, 0, now() + interval '5 minutes', now())
+     VALUES ($1, $2, 0, now() + interval '5 minutes', COALESCE($3, to_timestamp(0)))
      ON CONFLICT (email) DO UPDATE
      SET code_hash = EXCLUDED.code_hash,
          attempts = 0,
          expires_at = EXCLUDED.expires_at,
-         last_sent_at = EXCLUDED.last_sent_at`,
-    [normalizedEmail, codeHash]
+         last_sent_at = COALESCE($3, to_timestamp(0))`,
+    [normalizedEmail, codeHash, previousLastSentAt]
   );
 
   // Dispatch email (mailer handles transport and failure gracefully)
@@ -81,11 +88,18 @@ async function sendOtp({ email, pool, env, mailer }) {
     try {
       await mailer.sendOtpEmail({ to: normalizedEmail, code });
     } catch (err) {
-      // If email delivery fails, roll back the OTP record so the user is not locked out by the 60-second cooldown
-      await pool.query('DELETE FROM otps WHERE email = $1', [normalizedEmail]).catch(() => {});
+      // If email delivery fails, roll back OTP / cooldown so the user is not blocked from retrying
+      if (!previousRow) {
+        await pool.query('DELETE FROM otps WHERE email = $1', [normalizedEmail]).catch(() => {});
+      } else {
+        await pool.query('UPDATE otps SET last_sent_at = $2 WHERE email = $1', [normalizedEmail, previousLastSentAt]).catch(() => {});
+      }
       throw err;
     }
   }
+
+  // SUCCESS: Only update last_sent_at to now() after email successfully dispatched
+  await pool.query('UPDATE otps SET last_sent_at = now() WHERE email = $1', [normalizedEmail]);
 
   // Always return the exact same generic message regardless of user existence
   return { message: 'If this email is valid, a verification code has been sent' };

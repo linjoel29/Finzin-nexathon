@@ -30,14 +30,14 @@ function isAllowedOrigin(origin, envClientOrigin) {
 
   const cleanOrigin = origin.trim().replace(/\/+$/, '');
 
-  // 1. Check exact configured origins from env (supports comma-separated list or single URL)
+  // 1. Check exact configured origins from env (supports comma-separated list, trims whitespace, ignores trailing slashes)
   if (envClientOrigin) {
     const configuredOrigins = envClientOrigin
       .split(',')
       .map((o) => o.trim().replace(/\/+$/, ''))
       .filter(Boolean);
 
-    if (configuredOrigins.includes(cleanOrigin)) {
+    if (configuredOrigins.some((o) => o.toLowerCase() === cleanOrigin.toLowerCase())) {
       return true;
     }
   }

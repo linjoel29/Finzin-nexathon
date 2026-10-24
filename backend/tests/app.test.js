@@ -19,6 +19,13 @@ test.before(() => {
 });
 test.after(async () => { if (pool) await pool.end(); });
 
+test('GET /health returns 200 ok for uptime pings without database', async () => {
+  const testApp = createApp({ env: { NODE_ENV: 'test', CLIENT_ORIGIN: 'http://localhost:5173' }, pool: {} });
+  const res = await request(testApp).get('/health');
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.body, { status: 'ok' });
+});
+
 test('GET /api/health returns ok and db connected', { skip }, async () => {
   const res = await request(app).get('/api/health');
   assert.equal(res.status, 200);

@@ -17,7 +17,12 @@ const schema = z.object({
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
   // The only website allowed to call this API from a browser (can be single origin or comma-separated list)
   CLIENT_ORIGIN: z.string().min(1).default('http://localhost:5173'),
-  // Email (used from Step 2, optional now)
+  // Email provider configuration (Brevo HTTPS for cloud / SMTP for local)
+  EMAIL_PROVIDER: z.preprocess(emptyToUndefined, z.enum(['brevo', 'smtp']).default('smtp')),
+  BREVO_API_KEY: optionalString,
+  MAIL_FROM_EMAIL: optionalString,
+  MAIL_FROM_NAME: z.preprocess(emptyToUndefined, z.string().default('Finzin Banking')),
+  // Legacy / Local Gmail SMTP
   GMAIL_USER: optionalString,
   GMAIL_APP_PASSWORD: optionalString,
   // Demo-only fixed OTP: exactly 6 digits when set

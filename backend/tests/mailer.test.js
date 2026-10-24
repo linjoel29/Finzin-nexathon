@@ -1,8 +1,9 @@
-// mailer.test.js - unit tests for mailer configuration, timeout classification, failure rollback, and credential sanitization.
+// mailer.test.js - unit tests for mailer configuration, Brevo HTTPS provider, timeout classification, failure rollback, and credential sanitization.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   createMailer,
+  sendBrevoEmail,
   classifySmtpError,
   sanitizeErrorMessage,
   formatSafeLog,
@@ -103,29 +104,159 @@ test('inspectEnvironmentVariables: reports unconfigured when variables missing',
   assert.equal(audit.cleanPass, null);
 });
 
-test('createMailer: unconfigured environment skips email without throwing in dev mode', async () => {
-  const mailer = createMailer({ GMAIL_USER: undefined, GMAIL_APP_PASSWORD: undefined });
-  assert.equal(mailer.isConfigured(), false);
+// ---------------------------------------------------------------------
+// BREVO HTTPS PROVIDER TESTS (MOCKED)
+// ---------------------------------------------------------------------
 
-  await assert.doesNotReject(async () => {
-    await mailer.sendOtpEmail({ to: 'student@example.com', code: '123456' });
-  });
+test('Brevo email provider: success sends request with api-key header and payload', async () => {
+  let capturedUrl = null;
+  let capturedOptions = null;
+
+  const mockFetch = async (url, options) => {
+    capturedUrl = url;
+    capturedOptions = options;
+    return {
+      ok: true,
+      status: 201,
+      json: async () => ({ messageId: '<brevo-12345@smtp-relay.brevo.com>' }),
+    };
+  };
+
+  const env = {
+    EMAIL_PROVIDER: 'brevo',
+    BREVO_API_KEY: 'xkeysib-test-mock-api-key-12345',
+    MAIL_FROM_EMAIL: 'sender@finzin.com',
+    MAIL_FROM_NAME: 'Finzin Banking',
+  };
+
+  const mailer = createMailer(env, { fetchFn: mockFetch });
+  assert.equal(mailer.provider, 'brevo');
+  assert.equal(mailer.isConfigured(), true);
+
+  const res = await mailer.sendOtpEmail({ to: 'student@college.edu', code: '654321' });
+  assert.equal(res.messageId, '<brevo-12345@smtp-relay.brevo.com>');
+  assert.equal(capturedUrl, 'https://api.brevo.com/v3/smtp/email');
+  assert.equal(capturedOptions.headers['api-key'], 'xkeysib-test-mock-api-key-12345');
+
+  const parsedBody = JSON.parse(capturedOptions.body);
+  assert.equal(parsedBody.sender.email, 'sender@finzin.com');
+  assert.equal(parsedBody.to[0].email, 'student@college.edu');
+  assert.ok(parsedBody.htmlContent.includes('654321'));
 });
 
-test('intermittent failure: transient failure returns 503 and rolls back OTP row, immediate retry succeeds', async () => {
+test('Brevo email provider: timeout triggers ONE retry and throws friendly 503', async () => {
+  let callCount = 0;
+
+  const mockFetch = async () => {
+    callCount++;
+    const err = new Error('The operation was aborted due to timeout');
+    err.name = 'TimeoutError';
+    throw err;
+  };
+
+  const env = {
+    EMAIL_PROVIDER: 'brevo',
+    BREVO_API_KEY: 'mock-key',
+    MAIL_FROM_EMAIL: 'sender@finzin.com',
+  };
+
+  const mailer = createMailer(env, { fetchFn: mockFetch });
+
+  await assert.rejects(
+    async () => mailer.sendOtpEmail({ to: 'student@college.edu', code: '112233' }),
+    (err) => {
+      assert.equal(err.status, 503);
+      assert.equal(err.message, 'Could not send the code, please try again');
+      return true;
+    }
+  );
+
+  // Verifies that initial attempt + ONE retry occurred (total 2 calls)
+  assert.equal(callCount, 2);
+});
+
+test('Brevo email provider: 401 bad API key retries once and returns friendly 503 without leaking key', async () => {
+  let callCount = 0;
+
+  const mockFetch = async () => {
+    callCount++;
+    return {
+      ok: false,
+      status: 401,
+      text: async () => JSON.stringify({ code: 'unauthorized', message: 'Key not found' }),
+    };
+  };
+
+  const env = {
+    EMAIL_PROVIDER: 'brevo',
+    BREVO_API_KEY: 'invalid-secret-key-that-must-not-be-logged',
+    MAIL_FROM_EMAIL: 'sender@finzin.com',
+  };
+
+  const mailer = createMailer(env, { fetchFn: mockFetch });
+
+  await assert.rejects(
+    async () => mailer.sendOtpEmail({ to: 'student@college.edu', code: '445566' }),
+    (err) => {
+      assert.equal(err.status, 503);
+      assert.equal(err.message, 'Could not send the code, please try again');
+      return true;
+    }
+  );
+
+  assert.equal(callCount, 2);
+});
+
+test('Brevo email provider: 5xx provider error retries once and returns friendly 503', async () => {
+  let callCount = 0;
+
+  const mockFetch = async () => {
+    callCount++;
+    return {
+      ok: false,
+      status: 502,
+      text: async () => 'Bad Gateway from upstream MTA',
+    };
+  };
+
+  const env = {
+    EMAIL_PROVIDER: 'brevo',
+    BREVO_API_KEY: 'test-key',
+    MAIL_FROM_EMAIL: 'sender@finzin.com',
+  };
+
+  const mailer = createMailer(env, { fetchFn: mockFetch });
+
+  await assert.rejects(
+    async () => mailer.sendOtpEmail({ to: 'student@college.edu', code: '998877' }),
+    (err) => {
+      assert.equal(err.status, 503);
+      assert.equal(err.message, 'Could not send the code, please try again');
+      return true;
+    }
+  );
+
+  assert.equal(callCount, 2);
+});
+
+// ---------------------------------------------------------------------
+// COOLDOWN ROLLBACK INTEGRATION TESTS
+// ---------------------------------------------------------------------
+
+test('cooldown rollback: failed send does NOT activate 60s cooldown; immediate retry succeeds', async () => {
   let attemptCount = 0;
   const mockMailer = {
     async sendOtpEmail() {
       attemptCount++;
       if (attemptCount === 1) {
         const { AppError } = require('../src/utils/AppError');
-        throw new AppError(503, 'Email delivery service is temporarily unavailable. Please try again shortly.');
+        throw new AppError(503, 'Could not send the code, please try again');
       }
-      return { messageId: '<mock-success@gmail.com>' };
+      return { messageId: '<mock-success@brevo.com>' };
     },
   };
 
-  // Mock database pool
+  // Mock in-memory database pool tracking otps table
   const storedOtps = new Map();
   const mockPool = {
     async query(sql, params) {
@@ -135,8 +266,20 @@ test('intermittent failure: transient failure returns 503 and rolls back OTP row
         return { rows: row ? [row] : [] };
       }
       if (sql.includes('INSERT INTO otps')) {
-        const [email, codeHash] = params;
-        storedOtps.set(email, { email, code_hash: codeHash, last_sent_at: new Date() });
+        const [email, codeHash, lastSentAt] = params;
+        storedOtps.set(email, {
+          email,
+          code_hash: codeHash,
+          last_sent_at: lastSentAt || new Date(0).toISOString(),
+        });
+        return { rowCount: 1 };
+      }
+      if (sql.includes('UPDATE otps SET last_sent_at = now() WHERE email = $1')) {
+        const email = params[0];
+        const row = storedOtps.get(email);
+        if (row) {
+          row.last_sent_at = new Date().toISOString();
+        }
         return { rowCount: 1 };
       }
       if (sql.includes('DELETE FROM otps WHERE email = $1')) {
@@ -155,23 +298,33 @@ test('intermittent failure: transient failure returns 503 and rolls back OTP row
     JWT_SECRET: 'test-secret-at-least-32-chars-long-1234567890',
   };
 
-  const testEmail = 'intermittent_student@college.edu';
+  const testEmail = 'rollback_student@college.edu';
 
-  // Attempt 1: Fails with 503 (transient SMTP failure)
+  // 1. Attempt 1 fails: throws 503
   await assert.rejects(
     async () => sendOtp({ email: testEmail, pool: mockPool, env: testEnv, mailer: mockMailer }),
     (err) => {
       assert.equal(err.status, 503);
-      assert.equal(err.message, 'Email delivery service is temporarily unavailable. Please try again shortly.');
+      assert.equal(err.message, 'Could not send the code, please try again');
       return true;
     }
   );
 
-  // Verify OTP row was rolled back in the database!
+  // 2. Cooldown check: OTP row was rolled back / last_sent_at was NOT set to now()
   assert.equal(storedOtps.has(testEmail), false);
 
-  // Attempt 2: Immediately retried (cooldown not active because record was rolled back) -> succeeds
+  // 3. Immediate retry succeeds without 429 rate limit
   const res2 = await sendOtp({ email: testEmail, pool: mockPool, env: testEnv, mailer: mockMailer });
   assert.equal(res2.message, 'If this email is valid, a verification code has been sent');
   assert.equal(storedOtps.has(testEmail), true);
+
+  // 4. Now that send succeeded, calling sendOtp a third time immediately triggers 429
+  await assert.rejects(
+    async () => sendOtp({ email: testEmail, pool: mockPool, env: testEnv, mailer: mockMailer }),
+    (err) => {
+      assert.equal(err.status, 429);
+      assert.ok(err.message.includes('Please wait'));
+      return true;
+    }
+  );
 });

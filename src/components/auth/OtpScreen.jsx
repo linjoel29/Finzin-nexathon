@@ -16,7 +16,19 @@ export default function OtpScreen({ isForgotPin = false }) {
 
   const [digits, setDigits] = useState(['', '', '', '', '', '']);
   const [resendCooldown, setResendCooldown] = useState(60);
+  const [isWaking, setIsWaking] = useState(false);
   const inputRefs = useRef([]);
+
+  // Detect slow requests / cold boots (> 5s)
+  useEffect(() => {
+    let timer;
+    if (loading) {
+      timer = setTimeout(() => setIsWaking(true), 5000);
+    } else {
+      setIsWaking(false);
+    }
+    return () => clearTimeout(timer);
+  }, [loading]);
 
   // 60-second countdown timer for OTP resend
   useEffect(() => {
@@ -158,9 +170,27 @@ export default function OtpScreen({ isForgotPin = false }) {
             </div>
           </div>
 
+          {loading && isWaking && (
+            <div className="flex items-center justify-center gap-2 rounded-xl bg-brand/10 border border-brand/20 p-2.5 text-xs text-brand font-medium">
+              <svg className="h-4 w-4 animate-spin shrink-0" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
+              <span>Server is waking up, please wait...</span>
+            </div>
+          )}
+
           {error && (
-            <div className="rounded-xl bg-err/10 px-4 py-2.5 text-xs font-medium text-err text-center">
-              {error}
+            <div className="flex flex-col gap-2 rounded-xl bg-err/10 border border-err/20 p-3 text-xs text-err text-center">
+              <span className="font-medium">{error}</span>
+              <button
+                type="button"
+                onClick={() => submitOtp()}
+                disabled={loading || digits.join('').length !== 6}
+                className="self-center rounded-lg bg-err/15 px-3 py-1 font-semibold text-err hover:bg-err/25 transition disabled:opacity-50"
+              >
+                Retry
+              </button>
             </div>
           )}
 
